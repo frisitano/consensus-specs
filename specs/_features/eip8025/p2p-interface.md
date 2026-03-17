@@ -14,6 +14,7 @@ imports proof types from [proof-engine.md](./proof-engine.md).
   - [Execution](#execution)
 - [Containers](#containers)
   - [`ProofByRootIdentifier`](#proofbyrootidentifier)
+  - [`ExecutionProofsByRangeRequest`](#executionproofsbyrangerequest)
 - [Helpers](#helpers)
   - [Modified `compute_fork_version`](#modified-compute_fork_version)
   - [New `compute_max_request_execution_proofs`](#new-compute_max_request_execution_proofs)
@@ -24,6 +25,7 @@ imports proof types from [proof-engine.md](./proof-engine.md).
       - [`execution_proof`](#execution_proof)
 - [The Req/Resp domain](#the-reqresp-domain)
   - [Messages](#messages)
+    - [ExecutionProofsByRange](#executionproofsbyrange)
     - [ExecutionProofsByRoot](#executionproofsbyroot)
     - [GetMetaData v4](#getmetadata-v4)
 - [The discovery domain: discv5](#the-discovery-domain-discv5)
@@ -50,6 +52,14 @@ imports proof types from [proof-engine.md](./proof-engine.md).
 class ProofByRootIdentifier(Container):
     block_root: Root
     proof_types: List[ProofType, MAX_EXECUTION_PROOFS_PER_PAYLOAD]
+```
+
+### `ExecutionProofsByRangeRequest`
+
+```python
+class ExecutionProofsByRangeRequest(Container):
+    start_slot: Slot
+    count: uint64
 ```
 
 ## Helpers
@@ -154,6 +164,47 @@ The following validations MUST pass before forwarding the
 ## The Req/Resp domain
 
 ### Messages
+
+#### ExecutionProofsByRange
+
+**Protocol ID:** `/eth2/beacon_chain/req/execution_proofs_by_range/1/`
+
+The `<context-bytes>` field is calculated as
+`context = compute_fork_digest(fork_version, genesis_validators_root)`.
+
+Request Content:
+
+```
+(
+  ExecutionProofsByRangeRequest
+)
+```
+
+Response Content:
+
+```
+(
+  List[SignedExecutionProof, compute_max_request_execution_proofs()]
+)
+```
+
+Requests execution proofs for a contiguous range of slots. The request specifies
+a `start_slot` and a `count` of slots. The responding peer iterates through
+beacon blocks in the range `[start_slot, start_slot + count)` and returns all
+known `SignedExecutionProof` entries associated with those blocks.
+
+The response MUST consist of zero or more `response_chunk`. Each _successful_
+`response_chunk` MUST contain a single `SignedExecutionProof` payload.
+
+Clients MUST keep the total number of requested proofs under
+`compute_max_request_execution_proofs()`. Since each slot may contain up to
+`MAX_EXECUTION_PROOFS_PER_PAYLOAD` proofs, the `count` field MUST satisfy
+`count * MAX_EXECUTION_PROOFS_PER_PAYLOAD <= compute_max_request_execution_proofs()`.
+
+Clients MUST respond with at least one proof, if they have it. Clients MAY limit
+the number of proofs in the response.
+
+Clients SHOULD return proofs in slot-ascending order within the requested range.
 
 #### ExecutionProofsByRoot
 
